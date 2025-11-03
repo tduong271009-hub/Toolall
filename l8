@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Tool - Game Selector</title>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyAXtM_AHMeg76S0VaxQTJ_e68qKg0KxKRk",
+        authDomain: "ma-my-7cb60.firebaseapp.com",
+        projectId: "ma-my-7cb60",
+        storageBucket: "ma-my-7cb60.firebasestorage.app",
+        messagingSenderId: "139387264637",
+        appId: "1:139387264637:web:5c296efe7d3bb97a2a5b14",
+        measurementId: "G-E6RHBS10QV"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    
+    // Hàm chuyển hướng nhanh
+    function redirectToIndex() {
+        // Sử dụng replace để ngăn người dùng quay lại trang tool bằng nút Back
+        window.location.replace('index.html');
+    }
+
+    async function checkUserStatusAndRedirect() {
+        // Mặc định ẩn body để tránh nội dung hiển thị trước khi check key
+        document.body.style.display = 'none'; 
+        
+        const userInfo = JSON.parse(localStorage.getItem('tool_user_info'));
+        
+        // Trường hợp 1: Key chưa nhập (không có userInfo)
+        if (!userInfo || !userInfo.username) {
+            redirectToIndex();
+            return;
+        }
+
+        try {
+            const userDoc = await db.collection('users').doc(userInfo.username).get();
+            const userData = userDoc.data();
+            const now = new Date();
+            const expiryDate = userData?.expiryDate ? new Date(userData.expiryDate) : new Date(0); // Lấy hạn sử dụng
+
+            // Trường hợp 2: Key không tồn tại, bị vô hiệu hoá, hoặc hết hạn
+            if (!userDoc.exists || !userData.isActive || expiryDate < now) {
+                localStorage.clear();
+                sessionStorage.clear();
+                redirectToIndex();
+                return;
+            }
+            
+            // Nếu Key hợp lệ: Hiện nội dung
+            document.body.style.display = 'block';
+            startPeriodicKeyCheck(userInfo.username);
+            
+        } catch (error) {
+            console.error("Lỗi khi kiểm tra key:", error);
+            // Lỗi kết nối Firebase (chuyển hướng an toàn)
+            redirectToIndex();
+        }
+    }
+    
+    async function startPeriodicKeyCheck(username) {
+        setInterval(async () => {
+            try {
+                const userDoc = await db.collection('users').doc(username).get();
+                const userData = userDoc.data();
+                const now = new Date();
+                const expiryDate = userData?.expiryDate ? new Date(userData.expiryDate) : new Date(0);
+
+                // Nếu key bị vô hiệu hoá giữa chừng hoặc hết hạn
+                if (!userDoc.exists || !userData.isActive || expiryDate < now) {
+                    localStorage.clear();
+                    sessionStorage.clear();
+                    redirectToIndex();
+                }
+            } catch (error) {
+                console.error("Lỗi kiểm tra key định kỳ:", error);
+            }
+        }, 5000); // Kiểm tra mỗi 5 giây
+    }
+    
+    // Chạy hàm kiểm tra ngay khi DOM được tải
+    document.addEventListener('DOMContentLoaded', checkUserStatusAndRedirect);
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      font-family:'Share Tech Mono',monospace;
+      background:radial-gradient(circle at 10% 10%, rgba(0,0,0,0.6), rgba(0,0,0,1));
+      color:#00ff00;height:100vh;overflow:hidden;
+      /* CSS giữ nguyên, nhưng JS sẽ điều chỉnh display */
+    }
+
+    /* --- Overlays (Game Selection) --- */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(135deg, #0052D4, #4364F7, #6FB1FC);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 20px;
+      transition: opacity 0.3s ease;
+    }
+
+    /* Đảm bảo màn hình nhập URL hiển thị nếu key hợp lệ */
+    body[style*="display: block"] .overlay#urlInputOverlay {
+        display: flex;
+    }
+    .overlay-box {
+      background: rgba(0,0,0,0.3);
+      padding: 30px 40px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+      backdrop-filter: blur(8px);
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+    .overlay-box h2 {
+      color: #fff;
+      margin-bottom: 20px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    }
+    .url-input {
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      width: 300px;
+    }
+    .continue-btn {
+        padding: 12px 25px;
+        font-size: 16px;
+        border: 2px solid;
+        border-radius: 10px;
+        cursor: pointer;
+        background: linear-gradient(145deg, #00ff00, #00b300);
+        border-color: #008000;
+        color: #fff;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .continue-btn:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.4); }
+
+    /* iframe behind UI */
+    #fullscreenIframe{position:fixed;inset:0;width:100%;height:100%;border:0;z-index:1;}
+
+    /* Main content initially hidden */
+    /* Cần chỉnh lại display mặc định thành flex cho .panel, #predictionPopup, .footer-text */
+    /* vì sau khi nhập URL, JS sẽ bật nó lên */
+    .panel, #predictionPopup, .footer-text { display: none; } 
+
+    /* Left panel */
+    .panel{
+      position:fixed;left:12px;top:12px;z-index:55;
+      display:none; /* Sẽ được bật bằng JS */
+      flex-direction:column;gap:8px;width:180px;
+    }
+    .btn{
+      background:rgba(0,255,0,0.09);
+      color:#00ff00;border:1px solid rgba(0,255,0,0.25);
+      padding:8px 10px;border-radius:8px;font-size:13px;text-align:center;
+      cursor:pointer;transition:0.12s;
+    }
+    .btn:hover{transform:translateY(-2px)}
+    .btn:disabled{cursor:not-allowed;opacity:0.6;transform:none;}
+    .logout-btn{
+      background:linear-gradient(90deg,#2b0000,#700000);color:#fff;border:1px solid #ff3b3b;
+    }
+
+    /* === Khung nháy và hiệu ứng MỚI === */
+    .prediction-box {
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(135deg, #ff9800, #00eaff);
+      border-radius: 20px;
+      border: 2px solid #fff;
+      padding: 5px 0px;
+      display: none; /* Sẽ được bật bằng JS */
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+      z-index: 99999;
+      cursor: move;
+      touch-action: none;
+      min-width: 170px;
+      height: 60px;
+    }
+
+    .prediction-box .item {
+        display:flex; 
+        flex-direction:column; 
+        align-items:center;
+    }
+    
+    .prediction-box .label {
+        font-weight:bold; 
+        font-size:14px; 
+        margin-bottom:4px; 
+        color:#fff; 
+        text-shadow:1px 1px 3px #000;
+    }
+    
+    .prediction-box .circle {
+        width:25px; 
+        height:25px; 
+        border-radius:50%; 
+        border:2px solid #fff;
+        display:flex; 
+        align-items:center; 
+        justify-content:center; 
+        font-weight:bold; 
+        font-size:14px;
+        opacity:0.2;
+        transition: opacity 0.3s, box-shadow 0.3s, background 0.3s;
+    }
+    
+    .circle.active {
+      background: #00ff00;
+      opacity:1; 
+      box-shadow:0 0 10px #00ff00, 0 0 20px #00ff00;
+    }
+    
+    .prediction-box .logo {
+        width:55px; 
+        height:55px; 
+        object-fit:contain;
+    }
+    
+    .prediction-box .close-btn {
+        position:absolute; 
+        top:4px; 
+        right:6px; 
+        cursor:pointer; 
+        font-size:20px; 
+        font-weight:bold; 
+        color:#fff;
+    }
+
+    .footer-text{position:fixed;bottom:8px;right:12px;font-size:13px;color:#00ff00;text-shadow:0 0 5px #00ff00,0 0 10px #00ff00;animation:neonBlink 1.5s infinite alternate;z-index:50; display: none; /* Sẽ được bật bằng JS */}
+    @keyframes neonBlink{0%{opacity:1;}50%{opacity:0.6;}100%{opacity:1;}}
+
+    @media(max-width:480px){
+      #predictionPopup{width:180px; height: 75px; right:8px;top:60px}
+      .prediction-circle { width: 40px; height: 40px; }
+      .dice-icon { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="urlInputOverlay" class="overlay">
+    <div class="overlay-box">
+      <h2>Nhập Link Game</h2>
+      <input type="url" id="gameUrlInput" class="url-input" placeholder="Ví dụ: https://play.sun.win">
+      <button id="continueBtn" class="continue-btn">Tiếp tục</button>
+    </div>
+  </div>
+  <iframe id="fullscreenIframe" src="" name="fullscreenIframe"></iframe>
+  <div class="panel">
+    <button id="activateBtn" class="btn">Kích Hoạt</button>
+    <button id="logoutBtn" class="btn logout-btn">Thoát Game</button>
+  </div>
+  
+  <div id="predictionPopup" class="prediction-box" role="dialog" aria-hidden="true">
+    <div class="item">
+        <span class="label">TÀI</span>
+        <div id="taiCircle" class="circle tai"></div>
+    </div>
+    <img src="https://i.postimg.cc/B6WH4JGR/logo.png" alt="Logo" class="logo">
+    <div class="item">
+        <span class="label">XỈU</span>
+        <div id="xiuCircle" class="circle xiu"></div>
+    </div>
+    <span class="close-btn">✖</span>
+  </div>
+
+  <div class="footer-text">
+    @CSKHTOOLLXK
+  </div>
+  <script>
+  /* --- Element References --- */
+  const urlInputOverlay = document.getElementById('urlInputOverlay');
+  const gameUrlInput = document.getElementById('gameUrlInput');
+  const continueBtn = document.getElementById('continueBtn');
+  // Chỉnh lại selector để chỉ chọn các phần tử UI chính
+  const panel = document.getElementById('panel');
+  const footerText = document.querySelector('.footer-text');
+
+
+  const fullscreenIframe = document.getElementById('fullscreenIframe');
+
+  const activateBtn = document.getElementById('activateBtn');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const predictionPopup = document.getElementById('predictionPopup');
+  
+  const taiCircle = document.getElementById('taiCircle');
+  const xiuCircle = document.getElementById('xiuCircle');
+  const closePopup = predictionPopup.querySelector('.close-btn');
+
+  /* --- State & Config --- */
+  let cycleIntervalId = null;
+  let blinkIntervalId = null; 
+  const lastResults = [];
+  const maxResults = 5;
+
+  const mau_cau_xau = [
+    "TXXTX", "TXTXT", "XXTXX", "XTXTX", "TTXTX", "XTTXT", "TXXTT",
+    "TXTTX", "XXTTX", "XTXTT", "TXTXX", "XXTXT", "TTXXT", "TXTTT",
+    "XTXTX", "XTXXT", "XTTTX", "TTXTT", "XTXTT", "TXXTX"
+  ];
+
+  const mau_cau_dep = [
+    "TTTTT", "XXXXX", "TTTXX", "XXTTT", "TXTXX", "TTTXT", "XTTTX",
+    "TXXXT", "XXTXX", "TXTTT", "XTTTT", "TTXTX", "TXXTX", "TXTXT",
+    "XTXTX", "TTTXT", "XTTXT", "TXTXT", "XXTXX", "TXXXX"
+  ];
+
+  /* --- Initial Setup (Chỉ hiện Swal khi key hợp lệ)--- */
+  // Chú ý: Swal này được gọi sau khi check key Firebase thành công
+  setTimeout(() => {
+    if (document.body.style.display !== 'none' && !localStorage.getItem('sawInitialSwal')) {
+        Swal.fire({
+            title: 'Lưu Ý!!!',
+            text: 'Sau phiên mới hãy bật tool lên để chính xác! Up game mới ib tui nhé',
+            icon: 'info',
+            background: 'rgba(0,0,0,0.8)',
+            color: '#00ff00',
+            confirmButtonText: 'Đã hiểu',
+            confirmButtonColor: '#00ff00'
+        }).then(() => {
+             // Đánh dấu đã xem để không hiện lại
+            localStorage.setItem('sawInitialSwal', 'true');
+        });
+    }
+  }, 100); 
+
+  /* --- URL Input Logic --- */
+  continueBtn.addEventListener('click', () => {
+    const gameUrl = gameUrlInput.value.trim();
+    if (gameUrl) {
+      fullscreenIframe.src = gameUrl;
+      urlInputOverlay.style.display = 'none';
+      
+      // Hiện các phần UI chính sau khi nhập URL
+      document.querySelector('.panel').style.display = 'flex';
+      footerText.style.display = 'block';
+
+    } else {
+      Swal.fire({
+        icon: 'error',
+        title: 'Lỗi',
+        text: 'Vui lòng nhập một URL hợp lệ.',
+        background: 'rgba(0,0,0,0.8)',
+        color: '#ff3333'
+      });
+    }
+  });
+
+  /* --- Logout Logic --- */
+  logoutBtn.addEventListener('click', () => {
+    window.location.href = 'menu.html';
+  });
+
+  /* --- Main Tool Logic --- */
+  function runPredictionCycle() {
+    stopBlink();
+    taiCircle.classList.remove('active');
+    xiuCircle.classList.remove('active');
+
+    const newResult = Math.random() < 0.5 ? 'T' : 'X';
+    lastResults.push(newResult);
+    if (lastResults.length > maxResults) {
+        lastResults.shift();
+    }
+    console.log("Lịch sử kết quả:", lastResults);
+
+    setTimeout(() => {
+        let predictedResult;
+        const recentPattern = lastResults.join('');
+
+        if (lastResults.length === maxResults) {
+            if (mau_cau_dep.includes(recentPattern)) {
+                const lastChar = recentPattern.slice(-1);
+                predictedResult = (lastChar === "T") ? "T" : "X";
+                console.log("Dự đoán theo Mẫu đẹp:", predictedResult);
+            } else if (mau_cau_xau.includes(recentPattern)) {
+                const lastChar = recentPattern.slice(-1);
+                predictedResult = (lastChar === "T") ? "X" : "T";
+                console.log("Dự đoán theo Mẫu xấu:", predictedResult);
+            } else {
+                predictedResult = Math.random() < 0.5 ? "T" : "X";
+                console.log("Dự đoán Ngẫu nhiên:", predictedResult);
+            }
+        } else {
+            predictedResult = Math.random() < 0.5 ? "T" : "X";
+            console.log("Dự đoán Ngẫu nhiên (chưa đủ dữ liệu):", predictedResult);
+        }
+
+        const targetCircle = (predictedResult === 'T') ? taiCircle : xiuCircle;
+        
+        startBlink(targetCircle);
+
+        setTimeout(() => {
+            stopBlink();
+        }, 45000);
+
+    }, 15000);
+  }
+
+  function startBlink(activeCircle){
+      stopBlink();
+      let isBlinking = true;
+      blinkIntervalId = setInterval(()=>{
+          if(isBlinking){
+              activeCircle.classList.add("active");
+          } else {
+              activeCircle.classList.remove("active");
+          }
+          isBlinking = !isBlinking;
+      }, 500);
+  }
+
+  function stopBlink(){
+      if(blinkIntervalId){
+          clearInterval(blinkIntervalId);
+          blinkIntervalId = null;
+          taiCircle.classList.remove("active");
+          xiuCircle.classList.remove("active");
+      }
+  }
+
+  activateBtn.addEventListener('click', () => {
+    if (cycleIntervalId) return;
+
+    predictionPopup.style.display = 'flex';
+    activateBtn.disabled = true;
+    activateBtn.textContent = 'Đang chạy...';
+
+    runPredictionCycle();
+    cycleIntervalId = setInterval(runPredictionCycle, 60000);
+  });
+
+  closePopup.addEventListener('click', () => {
+    predictionPopup.style.display = 'none';
+    if (cycleIntervalId) {
+      clearInterval(cycleIntervalId);
+      cycleIntervalId = null;
+      activateBtn.disabled = false;
+      activateBtn.textContent = 'Kích Hoạt';
+      stopBlink();
+    }
+  });
+
+  /* === Logic Kéo thả (GIỮ NGUYÊN) === */
+  (function makeDraggable(el){
+    let startX = 0, startY = 0, initX = 0, initY = 0;
+    
+    const dragStart = (e) => {
+        if (e.target.classList.contains("close-btn")) return;
+        e.preventDefault();
+        startX = e.type.includes("touch") ? e.touches[0].clientX : e.clientX;
+        startY = e.type.includes("touch") ? e.touches[0].clientY : e.clientY;
+        
+        const style = window.getComputedStyle(el);
+        initX = parseFloat(style.left);
+        initY = parseFloat(style.top);
+
+        document.addEventListener("mousemove", dragging);
+        document.addEventListener("mouseup", dragEnd);
+        document.addEventListener("touchmove", dragging, { passive: false });
+        document.addEventListener("touchend", dragEnd);
+    };
+
+    const dragging = (e) => {
+        let clientX = e.type.includes("touch") ? e.touches[0].clientX : e.clientX;
+        let clientY = e.type.includes("touch") ? e.touches[0].clientY : e.clientY;
+        
+        el.style.left = (initX + (clientX - startX)) + "px";
+        el.style.top = (initY + (clientY - startY)) + "px";
+        el.style.right = "auto";
+        el.style.bottom = "auto";
+        e.preventDefault();
+    };
+
+    const dragEnd = () => {
+        document.removeEventListener("mousemove", dragging);
+        document.removeEventListener("mouseup", dragEnd);
+        document.removeEventListener("touchmove", dragging);
+        document.removeEventListener("touchend", dragEnd);
+    };
+
+    el.addEventListener("mousedown", dragStart);
+    el.addEventListener("touchstart", dragStart);
+  })(predictionPopup);
+  </script>
+</body>
+</html>

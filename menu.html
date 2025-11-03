@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chọn Game</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Poppins:wght@400;500;600&family=Fira+Code:wght@500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+    <script>
+        (function() {
+            const devtools = {
+                isOpen: false,
+                orientation: undefined
+            };
+    
+            const threshold = 160;
+    
+            const emitEvent = (isOpen, orientation) => {
+                window.dispatchEvent(new CustomEvent('devtoolschange', {
+                    detail: {
+                        isOpen,
+                        orientation
+                    }
+                }));
+            };
+    
+            const main = ({emitEvents = true} = {}) => {
+                const now = Date.now();
+                debugger;
+                const diff = Date.now() - now;
+    
+                if (diff > threshold) {
+                    if (!devtools.isOpen) {
+                        emitEvent(true);
+                    }
+                    devtools.isOpen = true;
+                } else {
+                    if (devtools.isOpen) {
+                        emitEvent(false);
+                    }
+                    devtools.isOpen = false;
+                }
+            };
+    
+            main({emitEvents: false});
+            setInterval(main, 500);
+    
+            window.addEventListener('devtoolschange', event => {
+                if (event.detail.isOpen) {
+                    document.body.innerHTML = `<div style="background-color: #000; color: red; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; display: flex; justify-content: center; align-items: center; font-size: 24px; font-family: sans-serif;">PHÁT HIỆN HÀNH VI CỐ TÌNH CAN THIỆP HỆ THỐNG!</div>`;
+                    setTimeout(() => {
+                        window.location.href = 'index.html';
+                    }, 1500);
+                }
+            });
+    
+            window.addEventListener('contextmenu', function (e) {
+              e.preventDefault();
+            }, false);
+    
+            window.addEventListener('keydown', function(e) {
+                if (e.keyCode === 123 || (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.keyCode === 74)) || (e.ctrlKey && e.keyCode === 85)) {
+                    e.preventDefault();
+                }
+            });
+        })();
+    </script>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAXtM_AHMeg76S0VaxQTJ_e68qKg0KxKRk",
+            authDomain: "ma-my-7cb60.firebaseapp.com",
+            projectId: "ma-my-7cb60",
+            storageBucket: "ma-my-7cb60.firebasestorage.app",
+            messagingSenderId: "139387264637",
+            appId: "1:139387264637:web:5c296efe7d3bb97a2a5b14",
+            measurementId: "G-E6RHBS10QV"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        async function checkUserAndKey() {
+            const userInfo = JSON.parse(localStorage.getItem('tool_user_info'));
+            
+            if (!userInfo || !userInfo.username) {
+                window.location.href = 'index.html';
+                return;
+            }
+
+            try {
+                const userDoc = await db.collection('users').doc(userInfo.username).get();
+                const userData = userDoc.data();
+                
+                if (!userDoc.exists || !userData.isActive || new Date(userData.expiryDate) < new Date()) {
+                    localStorage.clear();
+                    sessionStorage.clear();
+                    window.location.href = 'index.html';
+                    return;
+                }
+                
+                startPeriodicKeyCheck(userInfo.username);
+            } catch (error) {
+                console.error("Lỗi khi kiểm tra key:", error);
+                window.location.href = 'index.html';
+            }
+        }
+        
+        async function startPeriodicKeyCheck(username) {
+            setInterval(async () => {
+                try {
+                    const userDoc = await db.collection('users').doc(username).get();
+                    const userData = userDoc.data();
+                    
+                    if (!userDoc.exists || !userData.isActive || new Date(userData.expiryDate) < new Date()) {
+                        localStorage.clear();
+                        sessionStorage.clear();
+                        window.location.href = 'index.html';
+                    }
+                } catch (error) {
+                    console.error("Lỗi khi kiểm tra key định kỳ:", error);
+                    window.location.href = 'index.html';
+                }
+            }, 5000);
+        }
+        
+        document.addEventListener('DOMContentLoaded', checkUserAndKey);
+    </script>
+
+    <style>
+      :root {
+        --bg-color: #0c0d12;
+        --panel-bg: rgba(18, 20, 26, 0.7);
+        --accent-color: #00b4d8;
+        --accent-glow: rgba(0, 180, 216, 0.6);
+        --text-color: #f0f2f5;
+        --text-color-secondary: #8892b0;
+        --border-color: rgba(0, 180, 216, 0.2);
+        --border-hover: rgba(0, 180, 216, 0.7);
+        --shadow-color: rgba(0, 180, 216, 0.4);
+        --danger-color: #ff5e5e;
+        --font-body: 'Poppins', sans-serif;
+        --font-title: 'Orbitron', sans-serif;
+        --font-mono: 'Fira Code', monospace;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+      @keyframes neonPulse {
+        0%, 100% { text-shadow: 0 0 5px var(--accent-glow), 0 0 10px var(--accent-glow); }
+        50% { text-shadow: 0 0 2px var(--accent-glow), 0 0 5px var(--accent-glow); }
+      }
+      body {
+        font-family: var(--font-body);
+        background-color: var(--bg-color);
+        background-image:
+          radial-gradient(ellipse at top left, var(--accent-color) 0%, transparent 40%),
+          radial-gradient(ellipse at bottom right, var(--danger-color) 0%, transparent 40%);
+        background-blend-mode: overlay;
+        background-size: 150% 150%;
+        color: var(--text-color);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        padding-top: 80px;
+      }
+      .main-header {
+        position: fixed; top: 0; left: 0;
+        width: 100%; padding: 15px 5%;
+        background: rgba(12, 13, 18, 0.8);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid var(--border-color);
+        z-index: 1000;
+        display: flex; justify-content: space-between; align-items: center;
+      }
+      .logo {
+        font-family: var(--font-title);
+        font-size: 22px; font-weight: bold; color: white;
+        text-decoration: none;
+        text-shadow: 0 0 8px var(--accent-glow);
+        animation: neonPulse 4s linear infinite alternate;
+      }
+      .main-nav ul { list-style: none; display: flex; align-items: center; gap: 30px; }
+      .main-nav a, #menu-logout-btn {
+        color: var(--text-color-secondary);
+        text-decoration: none; font-size: 16px; font-weight: 500;
+        padding-bottom: 5px; position: relative;
+        cursor: pointer; background: none; border: none;
+        font-family: var(--font-body);
+        transition: color 0.3s ease;
+      }
+      .main-nav a::after, #menu-logout-btn::after {
+        content: ''; position: absolute; bottom: 0; left: 50%;
+        transform: translateX(-50%); width: 0; height: 2px;
+        background-color: var(--accent-color);
+        transition: width 0.3s ease-out;
+      }
+      .main-nav a:hover, .main-nav a.active, #menu-logout-btn:hover { color: white; }
+      .main-nav a:hover::after, .main-nav a.active::after, #menu-logout-btn:hover::after { width: 100%; }
+      #menu-logout-btn:hover { color: var(--danger-color); }
+      #menu-logout-btn:hover::after { background-color: var(--danger-color); }
+      .hamburger-menu { display: none; background: none; border: none; color: white; font-size: 24px; cursor: pointer; z-index: 1001;}
+      @media (max-width: 768px) {
+          .main-nav { display: none; flex-direction: column; position: absolute; top: 100%; left: 0; width: 100%; background: rgba(12, 13, 18, 0.98); border-top: 1px solid var(--border-color); padding: 20px 0; }
+          .main-nav.active { display: flex; }
+          .main-nav ul { flex-direction: column; align-items: center; gap: 20px; }
+          .hamburger-menu { display: block; }
+      }
+      .container {
+        max-width: 800px;
+        width: 100%;
+        padding: 0 20px;
+        z-index: 1;
+        animation: fadeIn 0.8s ease-out;
+      }
+      .main-title {
+        font-family: var(--font-title);
+        text-align: center;
+        margin-bottom: 10px;
+        font-size: 28px;
+        text-transform: uppercase;
+        color: var(--accent-color);
+        text-shadow: 0 0 8px var(--accent-glow);
+      }
+      .subtitle {
+        font-size: 14px;
+        margin-bottom: 30px;
+        opacity: 0.8;
+        text-align: center;
+      }
+      .game-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 20px;
+        justify-content: center;
+      }
+      .game-card {
+        background: var(--panel-bg);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        padding: 20px;
+        text-align: center;
+        text-decoration: none;
+        color: var(--text-color);
+        transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+      .game-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4), 0 0 20px var(--shadow-color);
+        border-color: var(--border-hover);
+      }
+      .game-card img {
+        width: 80px;
+        height: 80px;
+        object-fit: contain;
+        margin-bottom: 15px;
+      }
+      .game-card h3 {
+        font-size: 18px;
+        font-weight: 600;
+        font-family: var(--font-title);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+    </style>
+</head>
+<body>
+    <script>
+        (function() {
+            const userInfo = JSON.parse(localStorage.getItem('tool_user_info'));
+            if (!userInfo || !userInfo.isActive) {
+                document.body.style.display = 'none'; 
+                Swal.fire({
+                    background: 'rgba(22, 27, 34, 0.95)', 
+                    color: '#E6EDF3',
+                    title: 'Truy cập bị từ chối!',
+                    text: 'Bạn cần đăng nhập và kích hoạt key để vào trang này. Đang chuyển hướng...',
+                    icon: 'error',
+                    timer: 2500,
+                    allowOutsideClick: false,
+                    showConfirmButton: false,
+                    timerProgressBar: true
+                }).then(() => {
+                    window.location.href = 'index.html';
+                });
+                throw new Error("Authentication failed. Halting script execution.");
+            }
+        })();
+    </script>
+    
+    <header class="main-header">
+        <a class='logo' href='/key'>TOOL VIP</a>
+        <nav class="main-nav" id="main-nav">
+            <ul>
+                <li><a href='/key'><i class="fas fa-home"></i> Home</a></li>
+                <li><a href="#" class="active"><i class="fas fa-gamepad"></i> Game</a></li>
+                <li><button id="menu-logout-btn"><i class="fas fa-sign-out-alt"></i> Đăng xuất</button></li>
+            </ul>
+        </nav>
+        <button class="hamburger-menu" id="hamburger-menu"><i class="fas fa-bars"></i></button>
+    </header>
+
+    <div class="container">
+        <h1 class="main-title">GAME CENTER</h1>
+        <p class="subtitle">Chọn một cổng game để bắt đầu</p>
+        <div class="game-grid">
+            <a class='game-card' href='/su'>
+                <img src="https://i.postimg.cc/y6wrZ8xx/IMG-7874.jpg" alt="Sunwin">
+                <h3>Sunwin</h3>
+            </a>
+            <a class='game-card' href='/79'>
+                <img src="https://i.postimg.cc/L6m7QtVN/IMG-20250903-234740-682.jpg" alt="LC79">
+                <h3>LC79</h3>
+            </a>
+            <a class='game-card' href='/sum'>
+                <img src="https://i.postimg.cc/httBzBKY/Logo-sum.png" alt="sumclub">
+                <h3>sumclub</h3>
+            </a>
+            <a class='game-card' href='/68'>
+                <img src="https://i.postimg.cc/QCPw2tx5/68gamebai-logo.webp" alt="68gb">
+                <h3>68gb</h3>
+            </a>
+            <a class='game-card' href='/l8'>
+                <img src="https://i.postimg.cc/dVC4BqqC/e8084232b0a94d9c8c617a93e8de675c8ac6d6be.jpg" alt="Luck8">
+                <h3>Luck8</h3>
+            </a>
+        </div>
+    </div>
+
+    <script>
+        const menuLogoutBtn = document.getElementById('menu-logout-btn');
+        const hamburgerMenu = document.getElementById('hamburger-menu');
+        const mainNav = document.getElementById('main-nav');
+        
+        const swalConfig = {
+            background: 'rgba(22, 27, 34, 0.95)',
+            color: '#E6EDF3',
+            confirmButtonColor: '#00b4d8'
+        };
+
+        const logout = () => {
+             localStorage.clear();
+             sessionStorage.clear();
+             Swal.fire({
+                ...swalConfig,
+                title: 'Đã đăng xuất!',
+                text: 'Đang chuyển hướng...', 
+                icon: 'success',
+                timer: 1000,
+                showConfirmButton: false,
+             }).then(() => {
+                window.location.href = 'index.html';
+             });
+        }
+        
+        menuLogoutBtn.addEventListener('click', logout);
+        hamburgerMenu.addEventListener('click', () => mainNav.classList.toggle('active'));
+    </script>
+</body>
+</html>

@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Tool - Game Selector</title>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyAXtM_AHMeg76S0VaxQTJ_e68qKg0KxKRk",
+        authDomain: "ma-my-7cb60.firebaseapp.com",
+        projectId: "ma-my-7cb60",
+        storageBucket: "ma-my-7cb60.firebasestorage.app",
+        messagingSenderId: "139387264637",
+        appId: "1:139387264637:web:5c296efe7d3bb97a2a5b14",
+        measurementId: "G-E6RHBS10QV"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    
+    // Hàm chuyển hướng nhanh
+    function redirectToIndex() {
+        // Sử dụng replace để ngăn người dùng quay lại trang tool bằng nút Back
+        window.location.replace('index.html');
+    }
+
+    async function checkUserStatusAndRedirect() {
+        // Mặc định ẩn body để tránh nội dung hiển thị trước khi check key
+        document.body.style.display = 'none'; 
+        
+        const userInfo = JSON.parse(localStorage.getItem('tool_user_info'));
+        
+        // Trường hợp 1: Key chưa nhập (không có userInfo)
+        if (!userInfo || !userInfo.username) {
+            redirectToIndex();
+            return;
+        }
+
+        try {
+            const userDoc = await db.collection('users').doc(userInfo.username).get();
+            const userData = userDoc.data();
+            const now = new Date();
+            const expiryDate = userData?.expiryDate ? new Date(userData.expiryDate) : new Date(0); // Lấy hạn sử dụng
+
+            // Trường hợp 2: Key không tồn tại, bị vô hiệu hoá, hoặc hết hạn
+            if (!userDoc.exists || !userData.isActive || expiryDate < now) {
+                localStorage.clear();
+                sessionStorage.clear();
+                redirectToIndex();
+                return;
+            }
+            
+            // Nếu Key hợp lệ: Hiện nội dung và bắt đầu kiểm tra định kỳ
+            document.body.style.display = 'block';
+            startPeriodicKeyCheck(userInfo.username);
+            
+        } catch (error) {
+            console.error("Lỗi khi kiểm tra key:", error);
+            // Lỗi kết nối Firebase (chuyển hướng an toàn)
+            redirectToIndex();
+        }
+    }
+    
+    async function startPeriodicKeyCheck(username) {
+        setInterval(async () => {
+            try {
+                const userDoc = await db.collection('users').doc(username).get();
+                const userData = userDoc.data();
+                const now = new Date();
+                const expiryDate = userData?.expiryDate ? new Date(userData.expiryDate) : new Date(0);
+
+                // Nếu key bị vô hiệu hoá giữa chừng hoặc hết hạn
+                if (!userDoc.exists || !userData.isActive || expiryDate < now) {
+                    localStorage.clear();
+                    sessionStorage.clear();
+                    redirectToIndex();
+                }
+            } catch (error) {
+                console.error("Lỗi kiểm tra key định kỳ:", error);
+            }
+        }, 5000); // Kiểm tra mỗi 5 giây
+    }
+    
+    // Chạy hàm kiểm tra ngay khi DOM được tải
+    document.addEventListener('DOMContentLoaded', checkUserStatusAndRedirect);
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      font-family:'Share Tech Mono',monospace;
+      background:radial-gradient(circle at 10% 10%, rgba(0,0,0,0.6), rgba(0,0,0,1));
+      color:#00ff00;height:100vh;overflow:hidden;
+      /* Mặc định ẩn, JS sẽ điều chỉnh display */
+      display: none; 
+    }
+
+    /* Đã bỏ phần overlay chọn game */
+    .overlay { display: none; }
+
+    /* iframe behind UI */
+    #fullscreenIframe{position:fixed;inset:0;width:100%;height:100%;border:0;z-index:1;}
+
+    /* Main content initially hidden */
+    .panel, #predictionPopup, .footer-text { display: flex; }
+
+    /* Left panel */
+    .panel{
+      position:fixed;left:12px;top:12px;z-index:55;
+      display:flex;flex-direction:column;gap:8px;width:180px;
+    }
+    .btn{
+      background:rgba(0,255,0,0.09);
+      color:#00ff00;border:1px solid rgba(0,255,0,0.25);
+      padding:8px 10px;border-radius:8px;font-size:13px;text-align:center;
+      cursor:pointer;transition:0.12s;
+    }
+    .btn:hover{transform:translateY(-2px)}
+    .btn:disabled{cursor:not-allowed;opacity:0.6;transform:none;}
+    .logout-btn{
+      background:linear-gradient(90deg,#2b0000,#700000);color:#fff;border:1px solid #ff3b3b;
+    }
+
+    /* === Khung nháy và hiệu ứng MỚI đã được thay thế === */
+    .prediction-box {
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(135deg, #ff3333, #0066ff);
+      border-radius: 20px;
+      border: 2px solid #fff;
+      padding: 5px 0px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+      z-index: 99999;
+      cursor: move;
+      touch-action: none;
+      min-width: 170px;
+      height: 60px;
+    }
+    
+    .prediction-box .item {
+        display:flex; 
+        flex-direction:column; 
+        align-items:center;
+    }
+    
+    .prediction-box .label {
+        font-weight:bold; 
+        font-size:14px; 
+        margin-bottom:4px; 
+        color:#fff; 
+        text-shadow:1px 1px 3px #000;
+    }
+    
+    .prediction-box .circle {
+        width:25px; 
+        height:25px; 
+        border-radius:50%; 
+        border:2px solid #fff;
+        display:flex; 
+        align-items:center; 
+        justify-content:center; 
+        font-weight:bold; 
+        font-size:14px;
+        opacity:0.2;
+        transition: opacity 0.3s, box-shadow 0.3s, background 0.3s;
+    }
+    
+    .circle.active {
+      background: #00ff00;
+      opacity:1; 
+      box-shadow:0 0 10px #00ff00, 0 0 20px #00ff00;
+    }
+    
+    .prediction-box .logo {
+        width:55px; 
+        height:55px; 
+        object-fit:contain;
+    }
+    
+    .prediction-box .close-btn {
+        position:absolute; 
+        top:4px; 
+        right:6px; 
+        cursor:pointer; 
+        font-size:20px; 
+        font-weight:bold; 
+        color:#fff;
+    }
+
+    .footer-text{position:fixed;bottom:8px;right:12px;font-size:13px;color:#00ff00;text-shadow:0 0 5px #00ff00,0 0 10px #00ff00;animation:neonBlink 1.5s infinite alternate;z-index:50;}
+    @keyframes neonBlink{0%{opacity:1;}50%{opacity:0.6;}100%{opacity:1;}}
+
+    @media(max-width:480px){
+      #predictionPopup{width:180px; height: 75px; right:8px;top:60px}
+      .prediction-circle { width: 40px; height: 40px; }
+      .dice-icon { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <iframe id="fullscreenIframe" src="https://play.lc79.bet/" name="fullscreenIframe"></iframe>
+  <div class="panel">
+    <button id="activateBtn" class="btn">Kích Hoạt</button>
+    <button id="logoutBtn" class="btn logout-btn">Thoát Game</button>
+  </div>
+  
+  <div id="predictionPopup" class="prediction-box" role="dialog" aria-hidden="true">
+    <div class="item">
+        <span class="label">TÀI</span>
+        <div id="taiCircle" class="circle tai"></div>
+    </div>
+    <img src="https://i.postimg.cc/L6m7QtVN/IMG-20250903-234740-682.jpg" alt="Logo" class="logo">
+    <div class="item">
+        <span class="label">XỈU</span>
+        <div id="xiuCircle" class="circle xiu"></div>
+    </div>
+    <span class="close-btn">✖</span>
+  </div>
+
+  <div class="footer-text">
+    @CSKHTOOLLXK
+  </div>
+  <script>
+  /* --- Element References --- */
+  const fullscreenIframe = document.getElementById('fullscreenIframe');
+
+  const activateBtn = document.getElementById('activateBtn');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const predictionPopup = document.getElementById('predictionPopup');
+  
+  // Lấy các vòng tròn từ pop-up mới
+  const taiCircle = document.getElementById('taiCircle');
+  const xiuCircle = document.getElementById('xiuCircle');
+  const closePopup = predictionPopup.querySelector('.close-btn');
+
+  /* --- State & Config --- */
+  let cycleIntervalId = null;
+  let blinkIntervalId = null;
+  const lastResults = [];
+  const maxResults = 5;
+
+  const mau_cau_xau = [
+    "TXXTX", "TXTXT", "XXTXX", "XTXTX", "TTXTX", "XTTXT", "TXXTT",
+    "TXTTX", "XXTTX", "XTXTT", "TXTXX", "XXTXT", "TTXXT", "TXTTT",
+    "XTXTX", "XTXXT", "XTTTX", "TTXTT", "XTXTT", "TXXTX"
+  ];
+
+  const mau_cau_dep = [
+    "TTTTT", "XXXXX", "TTTXX", "XXTTT", "TXTXX", "TTTXT", "XTTTX",
+    "TXXXT", "XXTXX", "TXTTT", "XTTTT", "TTXTX", "TXXTX", "TXTXT",
+    "XTXTX", "TTTXT", "XTTXT", "TXTXT", "XXTXX", "TXXXX"
+  ];
+
+  /* --- Logout Logic --- */
+  logoutBtn.addEventListener('click', () => {
+    window.location.href = 'menu.html';
+  });
+
+  /* --- Main Tool Logic --- */
+  function runPredictionCycle() {
+    stopBlink();
+    taiCircle.classList.remove('active');
+    xiuCircle.classList.remove('active');
+
+    const newResult = Math.random() < 0.5 ? 'T' : 'X';
+    lastResults.push(newResult);
+    if (lastResults.length > maxResults) {
+        lastResults.shift();
+    }
+    console.log("Lịch sử kết quả:", lastResults);
+
+    setTimeout(() => {
+        let predictedResult;
+        const recentPattern = lastResults.join('');
+
+        if (lastResults.length === maxResults) {
+            if (mau_cau_dep.includes(recentPattern)) {
+                const lastChar = recentPattern.slice(-1);
+                predictedResult = (lastChar === "T") ? "T" : "X";
+                console.log("Dự đoán theo Mẫu đẹp:", predictedResult);
+            } else if (mau_cau_xau.includes(recentPattern)) {
+                const lastChar = recentPattern.slice(-1);
+                predictedResult = (lastChar === "T") ? "X" : "T";
+                console.log("Dự đoán theo Mẫu xấu:", predictedResult);
+            } else {
+                predictedResult = Math.random() < 0.5 ? "T" : "X";
+                console.log("Dự đoán Ngẫu nhiên:", predictedResult);
+            }
+        } else {
+            predictedResult = Math.random() < 0.5 ? "T" : "X";
+            console.log("Dự đoán Ngẫu nhiên (chưa đủ dữ liệu):", predictedResult);
+        }
+
+        const targetCircle = (predictedResult === 'T') ? taiCircle : xiuCircle;
+        
+        startBlink(targetCircle);
+
+        setTimeout(() => {
+            stopBlink();
+        }, 45000);
+
+    }, 15000);
+  }
+
+  function startBlink(activeCircle){
+      stopBlink();
+      let isBlinking = true;
+      blinkIntervalId = setInterval(()=>{
+          if(isBlinking){
+              activeCircle.classList.add("active");
+          } else {
+              activeCircle.classList.remove("active");
+          }
+          isBlinking = !isBlinking;
+      }, 500);
+  }
+
+  function stopBlink(){
+      if(blinkIntervalId){
+          clearInterval(blinkIntervalId);
+          blinkIntervalId = null;
+          taiCircle.classList.remove("active");
+          xiuCircle.classList.remove("active");
+      }
+  }
+
+  activateBtn.addEventListener('click', () => {
+    if (cycleIntervalId) return;
+
+    predictionPopup.style.display = 'flex';
+    activateBtn.disabled = true;
+    activateBtn.textContent = 'Đang chạy...';
+
+    runPredictionCycle();
+    cycleIntervalId = setInterval(runPredictionCycle, 60000);
+  });
+
+  closePopup.addEventListener('click', () => {
+    predictionPopup.style.display = 'none';
+    if (cycleIntervalId) {
+      clearInterval(cycleIntervalId);
+      cycleIntervalId = null;
+      activateBtn.disabled = false;
+      activateBtn.textContent = 'Kích Hoạt';
+      stopBlink();
+    }
+  });
+
+  /* === Logic Kéo thả (GIỮ NGUYÊN) === */
+  (function makeDraggable(el){
+    let startX = 0, startY = 0, initX = 0, initY = 0;
+    
+    const dragStart = (e) => {
+        if (e.target.classList.contains("close-btn")) return;
+        e.preventDefault();
+        startX = e.type.includes("touch") ? e.touches[0].clientX : e.clientX;
+        startY = e.type.includes("touch") ? e.touches[0].clientY : e.clientY;
+        
+        const style = window.getComputedStyle(el);
+        // Lấy vị trí ban đầu (left và top), nếu không có thì lấy bounding rect
+        let currentLeft = style.left === 'auto' ? el.offsetLeft : parseFloat(style.left);
+        let currentTop = style.top === 'auto' ? el.offsetTop : parseFloat(style.top);
+        
+        // Cần tính toán lại vị trí ban đầu khi transform: translateX(-50%) đang hoạt động
+        if (style.transform.includes('translateX')) {
+            const rect = el.getBoundingClientRect();
+            // Lấy tọa độ tuyệt đối để bắt đầu kéo
+            initX = rect.left;
+            initY = rect.top;
+        } else {
+            initX = currentLeft;
+            initY = currentTop;
+        }
+
+
+        document.addEventListener("mousemove", dragging);
+        document.addEventListener("mouseup", dragEnd);
+        document.addEventListener("touchmove", dragging, { passive: false });
+        document.addEventListener("touchend", dragEnd);
+    };
+
+    const dragging = (e) => {
+        let clientX = e.type.includes("touch") ? e.touches[0].clientX : e.clientX;
+        let clientY = e.type.includes("touch") ? e.touches[0].clientY : e.clientY;
+        
+        // Vô hiệu hóa transform: translateX(-50%) khi bắt đầu kéo
+        el.style.transform = 'none'; 
+        
+        // Tính toán vị trí mới
+        el.style.left = (initX + (clientX - startX)) + "px";
+        el.style.top = (initY + (clientY - startY)) + "px";
+        
+        // Đặt lại các thuộc tính CSS ban đầu (bottom, right) thành 'auto' để chỉ sử dụng top/left cho việc kéo
+        el.style.right = "auto";
+        el.style.bottom = "auto";
+        e.preventDefault();
+    };
+
+    const dragEnd = () => {
+        document.removeEventListener("mousemove", dragging);
+        document.removeEventListener("mouseup", dragEnd);
+        document.removeEventListener("touchmove", dragging);
+        document.removeEventListener("touchend", dragEnd);
+    };
+
+    el.addEventListener("mousedown", dragStart);
+    el.addEventListener("touchstart", dragStart);
+  })(predictionPopup);
+  </script>
+</body>
+</html>
